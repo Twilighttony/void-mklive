@@ -322,7 +322,7 @@ set_cachedir() {
 # repodata files for the selected architecture.
 : "${XBPS_REPOSITORY:=--repository=http://alpha.de.repo.voidlinux.org/current \
                       --repository=http://alpha.de.repo.voidlinux.org/current/musl \
-                      --repository=http://alpha.de.repo.voidlinux.org/current/aarch64}"
+                      --repository=http://alpha.de.repo.voidlinux.org/current/aarch64/}"
 
 
 

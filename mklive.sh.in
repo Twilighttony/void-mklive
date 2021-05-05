@@ -29,7 +29,7 @@
 trap 'error_out $? $LINENO' INT TERM 0
 umask 022
 
-readonly REQUIRED_PKGS="base-files libgcc dash coreutils sed tar gawk syslinux grub-arm64-efi squashfs-tools xorriso"
+readonly REQUIRED_PKGS="base-files libgcc dash coreutils sed tar gawk grub-arm64-efi squashfs-tools xorriso"
 readonly INITRAMFS_PKGS="binutils xz device-mapper dhclient dracut-network openresolv"
 readonly PROGNAME=$(basename "$0")
 
@@ -170,25 +170,6 @@ cleanup_rootfs() {
     rm -r "$ROOTFS"/usr/lib/dracut/modules.d/01autoinstaller
 }
 
-generate_isolinux_boot() {
-    cp -f "$SYSLINUX_DATADIR"/isolinux.bin "$ISOLINUX_DIR"
-    cp -f "$SYSLINUX_DATADIR"/ldlinux.c32 "$ISOLINUX_DIR"
-    cp -f "$SYSLINUX_DATADIR"/libcom32.c32 "$ISOLINUX_DIR"
-    cp -f "$SYSLINUX_DATADIR"/vesamenu.c32 "$ISOLINUX_DIR"
-    cp -f "$SYSLINUX_DATADIR"/libutil.c32 "$ISOLINUX_DIR"
-    cp -f "$SYSLINUX_DATADIR"/chain.c32 "$ISOLINUX_DIR"
-    cp -f isolinux/isolinux.cfg.in "$ISOLINUX_DIR"/isolinux.cfg
-    cp -f ${SPLASH_IMAGE} "$ISOLINUX_DIR"
-
-    sed -i  -e "s|@@SPLASHIMAGE@@|$(basename "${SPLASH_IMAGE}")|" \
-        -e "s|@@KERNVER@@|${KERNELVERSION}|" \
-        -e "s|@@KEYMAP@@|${KEYMAP}|" \
-        -e "s|@@ARCH@@|$BASE_ARCH|" \
-        -e "s|@@LOCALE@@|${LOCALE}|" \
-        -e "s|@@BOOT_TITLE@@|${BOOT_TITLE}|" \
-        -e "s|@@BOOT_CMDLINE@@|${BOOT_CMDLINE}|" \
-        "$ISOLINUX_DIR"/isolinux.cfg
-}
 
 generate_grub_efi_boot() {
     cp -f grub/grub.cfg "$GRUB_DIR"
@@ -213,30 +194,30 @@ generate_grub_efi_boot() {
     LOOP_DEVICE="$(losetup --show --find "${GRUB_DIR}"/efiboot.img)"
     mount -o rw,flush -t vfat "${LOOP_DEVICE}" "${GRUB_EFI_TMPDIR}" >/dev/null 2>&1
 
-    cp -a "$IMAGEDIR"/boot "$VOIDHOSTDIR"
-    xbps-uchroot "$VOIDHOSTDIR" grub-mkstandalone -- \
-		 --directory="/usr/lib/grub/i386-efi" \
-		 --format="i386-efi" \
-		 --output="/tmp/bootia32.efi" \
-		 "boot/grub/grub.cfg"
-    if [ $? -ne 0 ]; then
-        umount "$GRUB_EFI_TMPDIR"
-        losetup --detach "${LOOP_DEVICE}"
-        die "Failed to generate EFI loader"
-    fi
+ #   cp -a "$IMAGEDIR"/boot "$VOIDHOSTDIR"
+#    xbps-uchroot "$VOIDHOSTDIR" grub-mkstandalone -- \
+#		 --directory="/usr/lib/grub/i386-efi" \
+#		 --format="i386-efi" \
+#		 --output="/tmp/bootia32.efi" \
+#		 "boot/grub/grub.cfg"
+ #   if [ $? -ne 0 ]; then
+   #     umount "$GRUB_EFI_TMPDIR"
+#        losetup --detach "${LOOP_DEVICE}"
+#        die "Failed to generate EFI loader"
+  #  fi
     mkdir -p "${GRUB_EFI_TMPDIR}"/EFI/BOOT
     cp -f "$VOIDHOSTDIR"/tmp/bootia32.efi "${GRUB_EFI_TMPDIR}"/EFI/BOOT/BOOTIA32.EFI
     xbps-uchroot "$VOIDHOSTDIR" grub-mkstandalone -- \
-		 --directory="/usr/lib/grub/x86_64-efi" \
-		 --format="x86_64-efi" \
-		 --output="/tmp/bootx64.efi" \
+		 --directory="/usr/lib/grub/arm64-efi" \
+		 --format="arm64-efi" \
+		 --output="/tmp/bootaa64.efi" \
 		 "boot/grub/grub.cfg"
     if [ $? -ne 0 ]; then
         umount "$GRUB_EFI_TMPDIR"
         losetup --detach "${LOOP_DEVICE}"
         die "Failed to generate EFI loader"
     fi
-    cp -f "$VOIDHOSTDIR"/tmp/bootx64.efi "${GRUB_EFI_TMPDIR}"/EFI/BOOT/BOOTX64.EFI
+    cp -f "$VOIDHOSTDIR"/tmp/bootaa64.efi "${GRUB_EFI_TMPDIR}"/EFI/BOOT/BOOTaa64.EFI
     umount "$GRUB_EFI_TMPDIR"
     losetup --detach "${LOOP_DEVICE}"
     rm -rf "$GRUB_EFI_TMPDIR"
@@ -270,12 +251,11 @@ generate_iso_image() {
         -iso-level 3 -rock -joliet \
         -max-iso9660-filenames -omit-period \
         -omit-version-number -relaxed-filenames -allow-lowercase \
-        -volid "VOID_LIVE" \
-        -eltorito-boot boot/isolinux/isolinux.bin \
-        -eltorito-catalog boot/isolinux/boot.cat \
-        -no-emul-boot -boot-load-size 4 -boot-info-table \
-        -eltorito-alt-boot -e boot/grub/efiboot.img -isohybrid-gpt-basdat -no-emul-boot \
-        -isohybrid-mbr "$SYSLINUX_DATADIR"/isohdpfx.bin \
+        -volid "VOID_LIVE" -eltorito-alt-boot -e boot/grub/efiboot.img \
+#        -eltorito-boot boot/isolinux/isolinux.bin \
+#        -eltorito-catalog boot/isolinux/boot.cat \
+ #       -no-emul-boot -boot-load-size 4 -boot-info-table \
+ #       -eltorito-alt-boot -e boot/grub/efiboot.img \ #-isohybrid-gpt-basdat -no-emul-boot \
         -output "$OUTPUT_FILE" "$IMAGEDIR" || die "Failed to generate ISO image"
 }
 
@@ -304,8 +284,7 @@ while getopts "a:b:r:c:C:T:Kk:l:i:I:s:S:o:p:v:h" opt; do
 	*) usage;;
     esac
 done
-shift $((OPTIND - 1))
-XBPS_REPOSITORY="$XBPS_REPOSITORY --repository=http://alpha.de.repo.voidlinux.org/current --repository=http://alpha.de.repo.voidlinux.org/current/musl"
+XBPS_REPOSITORY="$XBPS_REPOSITORY --repository=http://alpha.de.repo.voidlinux.org/current/aarch64 --repository=http://alpha.de.repo.voidlinux.org/current/aarch64/musl"
 # Configure dracut to use overlayfs for the writable overlay.
 BOOT_CMDLINE="$BOOT_CMDLINE rd.live.overlay.overlayfs=1 "
 
@@ -347,7 +326,7 @@ CURRENT_STEP=0
 STEP_COUNT=9
 [ -n "${INCLUDE_DIRECTORY}" ] && STEP_COUNT=$((STEP_COUNT+1))
 
-: ${SYSLINUX_DATADIR:="$VOIDHOSTDIR"/usr/lib/syslinux}
+
 : ${GRUB_DATADIR:="$VOIDHOSTDIR"/usr/share/grub}
 : ${SPLASH_IMAGE:=data/splash.png}
 : ${XBPS_INSTALL_CMD:=xbps-install}
